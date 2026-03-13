@@ -1,4 +1,6 @@
 // src/background/index.ts  – Service Worker
+import browser from 'webextension-polyfill';
+
 const NOTION_CLIENT_ID = import.meta.env.VITE_NOTION_CLIENT_ID as string;
 const NOTION_API_VERSION = '2022-06-28';
 
@@ -27,8 +29,8 @@ async function fetchYouTubeMetadata(url: string): Promise<{ title: string; chann
 }
 
 // ── Context Menu ─────────────────────────────────────────────────────────────
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({
+browser.runtime.onInstalled.addListener(() => {
+  browser.contextMenus.create({
     id: 'save-to-tubesync',
     title: 'Save to TubeSync',
     contexts: ['link', 'page', 'video'],
@@ -36,87 +38,84 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-chrome.contextMenus.onClicked.addListener((info: chrome.contextMenus.OnClickData) => {
+browser.contextMenus.onClicked.addListener(async (info: browser.Menus.OnClickData) => {
   if (info.menuItemId !== 'save-to-tubesync') return;
   const url = info.linkUrl || info.pageUrl;
   if (!url) return;
 
-  chrome.storage.local.get(['notion_token', 'notion_database_id'], async (r: Record<string, any>) => {
-    if (r.notion_token && r.notion_database_id) {
-      try {
-        // Fetch full metadata via oEmbed since we only have the URL
-        const meta = await fetchYouTubeMetadata(url);
-        await _saveVideoToNotion(r.notion_token, r.notion_database_id, url, meta.title, meta.channel, meta.thumbnail, []);
-        // Broadcast so the dashboard refreshes
-        chrome.runtime.sendMessage({ type: 'VIDEO_SAVED' }).catch(() => { });
-        console.log('[TubeSync] Context menu save succeeded:', url);
-      } catch (e: any) {
-        console.error('[TubeSync] Context menu save failed:', e.message);
-      }
-    } else {
-      console.warn('[TubeSync] Not configured.');
+  const r = await browser.storage.local.get(['notion_token', 'notion_database_id']);
+  if (r.notion_token && r.notion_database_id) {
+    try {
+      // Fetch full metadata via oEmbed since we only have the URL
+      const meta = await fetchYouTubeMetadata(url);
+      await _saveVideoToNotion(r.notion_token as string, r.notion_database_id as string, url, meta.title, meta.channel, meta.thumbnail, []);
+      // Broadcast so the dashboard refreshes
+      browser.runtime.sendMessage({ type: 'VIDEO_SAVED' }).catch(() => { });
+      console.log('[TubeSync] Context menu save succeeded:', url);
+    } catch (e: any) {
+      console.error('[TubeSync] Context menu save failed:', e.message);
     }
-  });
+  } else {
+    console.warn('[TubeSync] Not configured.');
+  }
 });
 
 // ── Message Router ────────────────────────────────────────────────────────────
-chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
-  (async () => {
+browser.runtime.onMessage.addListener((msg: any) => {
+  return (async () => {
     try {
       switch (msg.type) {
 
         // ── OAuth ──
         case 'NOTION_AUTH': {
-          const redirectUrl = chrome.identity.getRedirectURL();
+          const redirectUrl = browser.identity.getRedirectURL();
           const authUrl =
             `https://api.notion.com/v1/oauth/authorize?client_id=${NOTION_CLIENT_ID}` +
             `&response_type=code&owner=user&redirect_uri=${encodeURIComponent(redirectUrl)}`;
-          chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, async (returnUrl?: string) => {
-            if (chrome.runtime.lastError || !returnUrl) {
-              sendResponse({ success: false, error: chrome.runtime.lastError?.message ?? 'Auth cancelled' });
-              return;
-            }
-            const code = new URL(returnUrl).searchParams.get('code');
-            if (!code) { sendResponse({ success: false, error: 'No code returned' }); return; }
-            try {
-              // We call the Cloudflare Worker proxy instead of Notion directly to protect the secret
-              const res = await fetch('https://tubesync-auth.juniorjean7.workers.dev', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code, redirect_uri: redirectUrl }),
+          
+          const returnUrl = await browser.identity.launchWebAuthFlow({ url: authUrl, interactive: true });
+          if (!returnUrl) {
+            return { success: false, error: 'Auth cancelled' };
+          }
+          const code = new URL(returnUrl).searchParams.get('code');
+          if (!code) return { success: false, error: 'No code returned' };
+          
+          try {
+            // We call the Cloudflare Worker proxy instead of Notion directly to protect the secret
+            const res = await fetch('https://tubesync-auth.juniorjean7.workers.dev', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code, redirect_uri: redirectUrl }),
+            });
+            const data = await res.json();
+            if (data.access_token) {
+              await browser.storage.local.set({
+                notion_token: data.access_token,
+                workspace_name: data.workspace_name ?? 'Workspace',
+                workspace_icon: data.workspace_icon ?? '',
+                workspace_id: data.workspace_id ?? '',
+                bot_id: data.bot_id ?? '',
               });
-              const data = await res.json();
-              if (data.access_token) {
-                await chrome.storage.local.set({
-                  notion_token: data.access_token,
-                  workspace_name: data.workspace_name ?? 'Workspace',
-                  workspace_icon: data.workspace_icon ?? '',
-                  workspace_id: data.workspace_id ?? '',
-                  bot_id: data.bot_id ?? '',
-                });
-                sendResponse({ success: true, workspace: data.workspace_name });
-              } else {
-                sendResponse({ success: false, error: JSON.stringify(data) });
-              }
-            } catch (e: any) {
-              sendResponse({ success: false, error: e.message });
+              return { success: true, workspace: data.workspace_name };
+            } else {
+              return { success: false, error: JSON.stringify(data) };
             }
-          });
-          return true;
+          } catch (e: any) {
+            return { success: false, error: e.message };
+          }
         }
 
         // ── Disconnect ──
         case 'DISCONNECT': {
-          await chrome.storage.local.clear();
-          sendResponse({ success: true });
-          break;
+          await browser.storage.local.clear();
+          return { success: true };
         }
 
         // ── List user's Notion DBs ──
         case 'GET_DATABASES': {
-          const s = await chrome.storage.local.get('notion_token');
+          const s = await browser.storage.local.get('notion_token');
           const token = s.notion_token as string | undefined;
-          if (!token) { sendResponse({ success: false, error: 'Not authenticated' }); break; }
+          if (!token) return { success: false, error: 'Not authenticated' };
           const res = await fetch('https://api.notion.com/v1/search', {
             method: 'POST',
             headers: {
@@ -128,29 +127,26 @@ chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
           });
           if (!res.ok) {
             const err = await res.json();
-            sendResponse({ success: false, error: err.message ?? 'Failed to list databases' });
-            break;
+            return { success: false, error: err.message ?? 'Failed to list databases' };
           }
           const data = await res.json();
-          sendResponse({ success: true, databases: data.results ?? [] });
-          break;
+          return { success: true, databases: data.results ?? [] };
         }
 
         // ── Set active DB ──
         case 'SET_DATABASE': {
-          await chrome.storage.local.set({
+          await browser.storage.local.set({
             notion_database_id: msg.databaseId,
             notion_database_name: msg.databaseName,
           });
-          sendResponse({ success: true });
-          break;
+          return { success: true };
         }
 
         // ── Create template DB ──
         case 'CREATE_TEMPLATE_DB': {
-          const s = await chrome.storage.local.get(['notion_token']);
+          const s = await browser.storage.local.get(['notion_token']);
           const token = s.notion_token as string | undefined;
-          if (!token) { sendResponse({ success: false, error: 'Not authenticated' }); break; }
+          if (!token) return { success: false, error: 'Not authenticated' };
 
           const searchRes = await fetch('https://api.notion.com/v1/search', {
             method: 'POST',
@@ -170,11 +166,10 @@ chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
           const parentPageId = pages.find((p: any) => !p.parent?.page_id)?.id ?? pages[0]?.id;
 
           if (!parentPageId) {
-            sendResponse({
+            return {
               success: false,
               error: 'No accessible Notion pages found.\n\nPlease share at least one page with the TubeSync integration, then try again.',
-            });
-            break;
+            };
           }
 
           const dbRes = await fetch('https://api.notion.com/v1/databases', {
@@ -210,26 +205,22 @@ chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
 
           const db = await dbRes.json();
           if (!dbRes.ok) {
-            sendResponse({ success: false, error: db.message ?? JSON.stringify(db) });
-            break;
+            return { success: false, error: db.message ?? JSON.stringify(db) };
           }
-
-          await chrome.storage.local.set({
+          await browser.storage.local.set({
             notion_database_id: db.id,
             notion_database_name: 'TubeSync Watch Later',
           });
-          sendResponse({ success: true, databaseId: db.id, databaseName: 'TubeSync Watch Later' });
-          break;
+          return { success: true, databaseId: db.id, databaseName: 'TubeSync Watch Later' };
         }
 
         // ── Get videos from active DB ──
         case 'GET_VIDEOS': {
-          const s = await chrome.storage.local.get(['notion_token', 'notion_database_id']);
+          const s = await browser.storage.local.get(['notion_token', 'notion_database_id']);
           const token = s.notion_token as string | undefined;
           const dbId = s.notion_database_id as string | undefined;
           if (!token || !dbId) {
-            sendResponse({ success: false, error: 'Not configured', videos: [] });
-            break;
+            return { success: false, error: 'Not configured', videos: [] };
           }
 
           let bodyPayload: any = { page_size: 50 };
@@ -257,8 +248,7 @@ chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
 
           if (!res.ok) {
             const err = await res.json();
-            sendResponse({ success: false, error: err.message ?? 'Failed to fetch videos', videos: [] });
-            break;
+            return { success: false, error: err.message ?? 'Failed to fetch videos', videos: [] };
           }
 
           const data = await res.json();
@@ -289,17 +279,16 @@ chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
               thumbnail,
             };
           });
-          sendResponse({ success: true, videos });
-          break;
+          return { success: true, videos };
         }
 
         // ── Save a video (from popup URL input OR in-player button) ──
         case 'SAVE_VIDEO': {
-          const s = await chrome.storage.local.get(['notion_token', 'notion_database_id']);
+          const s = await browser.storage.local.get(['notion_token', 'notion_database_id']);
           const token = s.notion_token as string | undefined;
           const dbId = s.notion_database_id as string | undefined;
-          if (!token) { sendResponse({ success: false, error: 'Not authenticated — connect Notion first.' }); break; }
-          if (!dbId) { sendResponse({ success: false, error: 'No database selected — complete setup first.' }); break; }
+          if (!token) return { success: false, error: 'Not authenticated — connect Notion first.' };
+          if (!dbId) return { success: false, error: 'No database selected — complete setup first.' };
 
           let { title, channel, thumbnail, tags } = msg;
 
@@ -321,16 +310,15 @@ chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
           );
 
           // Broadcast refresh event so popup updates instantly
-          chrome.runtime.sendMessage({ type: 'VIDEO_SAVED' }).catch(() => { });
-          sendResponse({ success: true });
-          break;
+          browser.runtime.sendMessage({ type: 'VIDEO_SAVED' }).catch(() => { });
+          return { success: true };
         }
 
         // ── Toggle Reference checkbox (heart button) ──
         case 'TOGGLE_REFERENCE': {
-          const s = await chrome.storage.local.get('notion_token');
+          const s = await browser.storage.local.get('notion_token');
           const token = s.notion_token as string | undefined;
-          if (!token || !msg.pageId) { sendResponse({ success: false, error: 'Missing token or pageId' }); break; }
+          if (!token || !msg.pageId) return { success: false, error: 'Missing token or pageId' };
           await fetch(`https://api.notion.com/v1/pages/${msg.pageId}`, {
             method: 'PATCH',
             headers: {
@@ -340,17 +328,16 @@ chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
             },
             body: JSON.stringify({ properties: { Reference: { checkbox: msg.value } } }),
           });
-          sendResponse({ success: true });
-          break;
+          return { success: true };
         }
 
         // ── Auto-archive video after 90% watched ──
         case 'AUTO_ARCHIVE_VIDEO': {
-          const s = await chrome.storage.local.get(['notion_token', 'notion_database_id', 'auto_archive']);
-          if (!s.auto_archive) { sendResponse({ success: false }); break; }
+          const s = await browser.storage.local.get(['notion_token', 'notion_database_id', 'auto_archive']);
+          if (!s.auto_archive) return { success: false };
           const token = s.notion_token as string | undefined;
           const dbId = s.notion_database_id as string | undefined;
-          if (!token || !dbId || !msg.url) { sendResponse({ success: false }); break; }
+          if (!token || !dbId || !msg.url) return { success: false };
 
           const qRes = await fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
             method: 'POST',
@@ -366,7 +353,7 @@ chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
           });
           const qData = await qRes.json();
           const page = qData.results?.[0];
-          if (!page) { sendResponse({ success: false }); break; }
+          if (!page) return { success: false };
 
           await fetch(`https://api.notion.com/v1/pages/${page.id}`, {
             method: 'PATCH',
@@ -377,15 +364,14 @@ chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
             },
             body: JSON.stringify({ properties: { Status: { select: { name: 'Archived' } } } }),
           });
-          sendResponse({ success: true });
-          break;
+          return { success: true };
         }
 
         // ── Mark watched (legacy, kept for compatibility) ──
         case 'MARK_WATCHED': {
-          const s = await chrome.storage.local.get('notion_token');
+          const s = await browser.storage.local.get('notion_token');
           const token = s.notion_token as string | undefined;
-          if (!token || !msg.pageId) { sendResponse({ success: false }); break; }
+          if (!token || !msg.pageId) return { success: false };
           await fetch(`https://api.notion.com/v1/pages/${msg.pageId}`, {
             method: 'PATCH',
             headers: {
@@ -395,41 +381,37 @@ chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
             },
             body: JSON.stringify({ properties: { Status: { select: { name: 'Archived' } } } }),
           });
-          sendResponse({ success: true });
-          break;
+          return { success: true };
         }
 
         // ── Pop-out ──
         case 'OPEN_POPOUT': {
-          chrome.windows.create({
-            url: chrome.runtime.getURL('index.html'),
+          await browser.windows.create({
+            url: browser.runtime.getURL('index.html'),
             type: 'popup',
             width: 400,
             height: 660,
           });
-          sendResponse({ success: true });
-          break;
+          return { success: true };
         }
 
         // ── Update settings ──
         case 'UPDATE_SETTINGS': {
-          await chrome.storage.local.set({
+          await browser.storage.local.set({
             auto_archive: msg.auto_archive,
             player_integration: msg.player_integration,
           });
-          sendResponse({ success: true });
-          break;
+          return { success: true };
         }
 
         default:
-          sendResponse({ success: false, error: `Unknown message type: ${msg.type}` });
+          return { success: false, error: `Unknown message type: ${msg.type}` };
       }
     } catch (e: any) {
       console.error('[TubeSync] Message handler error:', e);
-      sendResponse({ success: false, error: e.message });
+      return { success: false, error: e.message };
     }
   })();
-  return true;
 });
 
 // ── Helper: Write a video page to Notion ─────────────────────────────────────

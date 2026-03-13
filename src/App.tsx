@@ -1,6 +1,7 @@
 // src/App.tsx
 // Central state manager – loads storage on mount, decides which screen to show.
 import { useState, useEffect } from 'react';
+import browser from 'webextension-polyfill';
 import OnboardingScreen from './components/OnboardingScreen';
 import DashboardScreen from './components/DashboardScreen';
 import SettingsScreen from './components/SettingsScreen';
@@ -26,13 +27,8 @@ const DEFAULT_STATE: AppState = {
   playerIntegration: true,
 };
 
-function sendMsg<T = any>(msg: any): Promise<T> {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(msg, (res) => {
-      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-      else resolve(res);
-    });
-  });
+async function sendMsg<T = any>(msg: any): Promise<T> {
+  return browser.runtime.sendMessage(msg);
 }
 
 function App() {
@@ -42,23 +38,23 @@ function App() {
 
   // Load persisted state on mount
   useEffect(() => {
-    chrome.storage.local.get(
-      ['notion_token', 'workspace_name', 'notion_database_id', 'notion_database_name', 'auto_archive', 'player_integration'],
-      (r) => {
-        const token = (r.notion_token as string) ?? null;
-        const dbId = (r.notion_database_id as string) ?? null;
-        setApp({
-          token,
-          workspaceName: (r.workspace_name as string) ?? '',
-          databaseId: dbId,
-          databaseName: (r.notion_database_name as string) ?? '',
-          autoArchive: (r.auto_archive as boolean) ?? true,
-          playerIntegration: (r.player_integration as boolean) ?? true,
-        });
-        setScreen(token && dbId ? 'dashboard' : 'onboarding');
-        setLoading(false);
-      }
-    );
+    (async () => {
+      const r = await browser.storage.local.get(
+        ['notion_token', 'workspace_name', 'notion_database_id', 'notion_database_name', 'auto_archive', 'player_integration']
+      );
+      const token = (r.notion_token as string) ?? null;
+      const dbId = (r.notion_database_id as string) ?? null;
+      setApp({
+        token,
+        workspaceName: (r.workspace_name as string) ?? '',
+        databaseId: dbId,
+        databaseName: (r.notion_database_name as string) ?? '',
+        autoArchive: (r.auto_archive as boolean) ?? true,
+        playerIntegration: (r.player_integration as boolean) ?? true,
+      });
+      setScreen(token && dbId ? 'dashboard' : 'onboarding');
+      setLoading(false);
+    })();
   }, []);
 
   const handleAuthSuccess = (workspace: string, token: string) => {

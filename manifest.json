@@ -7,8 +7,14 @@
     "default_popup": "index.html"
   },
   "background": {
-    "service_worker": "src/background/index.ts",
+    "scripts": ["src/background/index.ts"],
     "type": "module"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "tubesync@juniorjean7.dev",
+      "strict_min_version": "109.0"
+    }
   },
   "content_scripts": [
     {
