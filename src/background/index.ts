@@ -1,9 +1,6 @@
 // src/background/index.ts  – Service Worker
-import dotenv from 'dotenv';
-dotenv.config();
-
-const NOTION_CLIENT_ID = process.env.NOTION_CLIENT_ID;
-const NOTION_CLIENT_SECRET = process.env.NOTION_CLIENT_SECRET;
+const NOTION_CLIENT_ID = import.meta.env.VITE_NOTION_CLIENT_ID as string;
+const NOTION_CLIENT_SECRET = import.meta.env.VITE_NOTION_CLIENT_SECRET as string;
 const NOTION_API_VERSION = '2022-06-28';
 
 // ── YouTube oEmbed: fetches title, channel, thumbnail from a YT URL (no API key needed) ──

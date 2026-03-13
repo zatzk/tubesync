@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import OnboardingScreen from './components/OnboardingScreen';
 import DashboardScreen from './components/DashboardScreen';
 import SettingsScreen from './components/SettingsScreen';
+import { TubeSyncLogo } from './components/Logo';
 
 export type AppScreen = 'onboarding' | 'dashboard' | 'settings';
 
@@ -88,7 +89,9 @@ function App() {
     return (
       <div style={{ width: 380, height: 580, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', fontFamily: 'Inter, sans-serif' }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#2373df', color: '#fff', fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>TS</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+            <TubeSyncLogo size={36} />
+          </div>
           <p style={{ color: '#94a3b8', fontSize: 13 }}>Loading...</p>
         </div>
       </div>

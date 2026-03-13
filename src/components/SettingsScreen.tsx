@@ -1,6 +1,7 @@
 // src/components/SettingsScreen.tsx
 import { useState, useEffect } from 'react';
 import type { AppState } from '../App';
+import { TubeSyncLogo } from './Logo';
 
 interface NotionDB { id: string; title: string }
 
@@ -97,7 +98,7 @@ export default function SettingsScreen({
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid #f1f5f9' }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 20, padding: 2, lineHeight: 1, display: 'flex' }}>←</button>
-        <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#2373df', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13 }}>TS</div>
+        <TubeSyncLogo size={28} />
         <span style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', flex: 1 }}>Settings</span>
         <button onClick={() => chrome.runtime.sendMessage({ type: 'OPEN_POPOUT' })} title="Pop out" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 16, padding: 2 }}>⧉</button>
       </div>
@@ -188,7 +189,7 @@ export default function SettingsScreen({
 
         {/* Buy me a coffee */}
         <button
-          onClick={() => chrome.tabs.create({ url: 'https://buymeacoffee.com' })}
+          onClick={() => chrome.tabs.create({ url: 'https://ko-fi.com/zatzk' })}
           style={{ width: '100%', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: 14, color: '#b45309', fontSize: 13, fontWeight: 700, padding: '13px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           ☕ Buy me a coffee
         </button>

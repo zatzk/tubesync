@@ -1,5 +1,6 @@
 // src/components/DashboardScreen.tsx
 import { useState, useEffect, useCallback } from 'react';
+import { TubeSyncLogo } from './Logo';
 
 interface Video {
   id: string;
@@ -113,7 +114,7 @@ export default function DashboardScreen({ workspaceName, onSettings }: Props) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', borderBottom: '1px solid #f1f5f9' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#2373df', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13 }}>TS</div>
+          <TubeSyncLogo size={28} />
           <span style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>TubeSync</span>
         </div>
 

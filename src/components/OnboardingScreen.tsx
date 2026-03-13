@@ -1,5 +1,6 @@
 // src/components/OnboardingScreen.tsx
 import { useState, useEffect } from 'react';
+import { TubeSyncLogo } from './Logo';
 
 interface NotionDB { id: string; title: string }
 
@@ -109,7 +110,7 @@ export default function OnboardingScreen({ token, workspaceName, onAuthSuccess, 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid #f1f5f9' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#2373df', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13 }}>TS</div>
+          <TubeSyncLogo size={28} />
           <span style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>TubeSync</span>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
