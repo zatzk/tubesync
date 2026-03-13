@@ -1,6 +1,5 @@
 // src/background/index.ts  – Service Worker
 const NOTION_CLIENT_ID = import.meta.env.VITE_NOTION_CLIENT_ID as string;
-const NOTION_CLIENT_SECRET = import.meta.env.VITE_NOTION_CLIENT_SECRET as string;
 const NOTION_API_VERSION = '2022-06-28';
 
 // ── YouTube oEmbed: fetches title, channel, thumbnail from a YT URL (no API key needed) ──
@@ -80,11 +79,11 @@ chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
             const code = new URL(returnUrl).searchParams.get('code');
             if (!code) { sendResponse({ success: false, error: 'No code returned' }); return; }
             try {
-              const creds = btoa(`${NOTION_CLIENT_ID}:${NOTION_CLIENT_SECRET}`);
-              const res = await fetch('https://api.notion.com/v1/oauth/token', {
+              // We call the Cloudflare Worker proxy instead of Notion directly to protect the secret
+              const res = await fetch('https://tubesync-auth.juniorjean7.workers.dev', {
                 method: 'POST',
-                headers: { Authorization: `Basic ${creds}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ grant_type: 'authorization_code', code, redirect_uri: redirectUrl }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, redirect_uri: redirectUrl }),
               });
               const data = await res.json();
               if (data.access_token) {
