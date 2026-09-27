@@ -23,7 +23,7 @@ function getVideoMetadata() {
   const url = window.location.href;
 
   // Title: try the page <title> first, fall back to h1
-  let title =
+  const title =
     (document.querySelector('h1.ytd-watch-metadata yt-formatted-string') as HTMLElement)?.innerText ||
     (document.querySelector('#title h1 yt-formatted-string') as HTMLElement)?.innerText ||
     document.title.replace(' - YouTube', '').trim();

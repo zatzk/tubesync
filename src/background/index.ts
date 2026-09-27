@@ -223,7 +223,7 @@ browser.runtime.onMessage.addListener((msg: any) => {
             return { success: false, error: 'Not configured', videos: [] };
           }
 
-          let bodyPayload: any = { page_size: 50 };
+          const bodyPayload: any = { page_size: 50 };
           if (msg.tab === 'Reference') {
             bodyPayload.filter = { property: 'Reference', checkbox: { equals: true } };
           } else {
@@ -290,7 +290,8 @@ browser.runtime.onMessage.addListener((msg: any) => {
           if (!token) return { success: false, error: 'Not authenticated — connect Notion first.' };
           if (!dbId) return { success: false, error: 'No database selected — complete setup first.' };
 
-          let { title, channel, thumbnail, tags } = msg;
+          let { title, channel, thumbnail } = msg;
+          const { tags } = msg;
 
           // If title/channel are missing (e.g. manual URL paste), fetch via oEmbed
           if (!title || !channel) {

@@ -1,0 +1,55 @@
+name: CI Pipeline & Quality Gate
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'feat/**'
+      - 'fix/**'
+  pull_request:
+    branches:
+      - main
+      - master
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: Lint, Typecheck & Test Coverage Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Gate 1 - ESLint Verification
+        run: npm run lint
+
+      - name: Gate 2 - Strict TypeScript Typecheck
+        run: npm run typecheck
+
+      - name: Gate 3 - Vitest Unit Tests & 80% Coverage Threshold Gate
+        run: npm run test:coverage
+
+      - name: Gate 4 - Extension Build Validation
+        run: npm run build
+
+      - name: Upload Test Coverage Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
